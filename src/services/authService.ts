@@ -3,7 +3,12 @@ import User from '../models/User';
 
 export class AuthService {
   static generateToken(userId: string): string {
-    const secret = process.env.JWT_SECRET as string;
+    const secret = process.env.JWT_SECRET;
+    
+    if (!secret) {
+      throw new Error('JWT_SECRET is not configured in environment variables');
+    }
+    
     const expiresIn = process.env.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'] || '24h';
     
     return jwt.sign(
@@ -12,6 +17,7 @@ export class AuthService {
       { expiresIn }
     );
   }
+
 
   // Register new user
   static async register(

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { ApiKeyController } from '../controllers/apiKeyController';
 import { authenticate, requirePermission } from '../middleware/auth';
+import { validateBody } from '../middleware/validation';
 
 const router = Router();
 
@@ -26,6 +27,7 @@ router.use(authenticate);
  *             properties:
  *               name:
  *                 type: string
+ *                 description: Unique name for the API key (cannot be the same as an existing active key for the user)
  *               permissions:
  *                 type: array
  *                 items:
@@ -37,10 +39,14 @@ router.use(authenticate);
  *     responses:
  *       201:
  *         description: API key created successfully
+ *       400:
+ *         description: Validation error
+ *       409:
+ *         description: An active API key with this name already exists
  *       401:
  *         description: Not authenticated
  */
-router.post('/create', ApiKeyController.createApiKey);
+router.post('/create', validateBody, ApiKeyController.createApiKey);
 
 /**
  * @swagger

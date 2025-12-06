@@ -1,5 +1,6 @@
 import ApiKey from '../models/ApiKey';
 import User from '../models/User';
+import { Op } from 'sequelize';
 
 export class ApiKeyService {
   // Create API key
@@ -8,17 +9,35 @@ export class ApiKeyService {
     name: string,
     permissions: string = 'read'
   ): Promise<any> {
+    // Check if an active API key with the same name already exists for this user
+    const existingKey = await ApiKey.findOne({
+      where: {
+        user_id: userId,
+        name: name,
+        is_active: true,
+        expires_at: {
+          [Op.gt]: new Date() 
+        }
+      }
+    });
+
+    if (existingKey) {
+      throw new Error('An active API key with this name already exists');
+    }
+
+    // Calculate expiration date
+    const expiresInDays = parseInt(process.env.API_KEY_EXPIRES_DAYS || '30');
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + parseInt(process.env.API_KEY_EXPIRES_DAYS || '30'));
+    expiresAt.setDate(expiresAt.getDate() + expiresInDays);
 
     const apiKey = await ApiKey.create({
       user_id: userId,
       name,
-      permissions,
+      permissions: permissions || 'read',
       expires_at: expiresAt,
     });
 
-    return apiKey.toJSON();
+    return apiKey;
   }
 
   // Revoke API key
@@ -37,13 +56,23 @@ export class ApiKeyService {
   }
 
   // Get user's API keys
-  static async getUserApiKeys(userId: string): Promise<any[]> {
+  static async getUserApiKeys(userId: string, activeOnly: boolean = false): Promise<any[]> {
+    const whereClause: any = { user_id: userId };
+    
+    if (activeOnly) {
+      whereClause.is_active = true;
+    }
+    
     const apiKeys = await ApiKey.findAll({
-      where: { user_id: userId },
+      where: whereClause,
       order: [['created_at', 'DESC']],
     });
 
     return apiKeys.map(key => key.toJSON());
+  }
+
+  static async getUserActiveApiKeys(userId: string): Promise<any[]> {
+    return this.getUserApiKeys(userId, true);
   }
 
   // Validate API key
@@ -87,7 +116,6 @@ export class ApiKeyService {
     return keyData;
   }
 
-  // Get API key by ID (optional helper method)
   static async getApiKeyById(apiKeyId: string, userId?: string): Promise<any> {
     const where: any = { id: apiKeyId };
     if (userId) {
@@ -115,5 +143,20 @@ export class ApiKeyService {
     );
 
     return affectedCount > 0;
+  }
+
+  static async isApiKeyNameExists(userId: string, name: string): Promise<boolean> {
+    const existingKey = await ApiKey.findOne({
+      where: {
+        user_id: userId,
+        name: name,
+        is_active: true,
+        expires_at: {
+          [Op.gt]: new Date()
+        }
+      }
+    });
+
+    return !!existingKey;
   }
 }

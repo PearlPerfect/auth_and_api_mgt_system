@@ -65,7 +65,7 @@ ApiKey.init(
       primaryKey: true,
     },
     key: {
-      type: DataTypes.STRING(64),
+      type: DataTypes.STRING(128), 
       allowNull: false,
       unique: true,
     },
@@ -127,10 +127,16 @@ ApiKey.init(
     updatedAt: 'updated_at',
     hooks: {
       beforeCreate: (apiKey: ApiKey) => {
+        // Generate key if not provided
         if (!apiKey.key) {
           apiKey.key = ApiKey.generateApiKey();
         }
       },
+      beforeValidate: (apiKey: ApiKey) => {
+        if (!apiKey.key) {
+          apiKey.key = ApiKey.generateApiKey();
+        }
+      }
     },
   }
 );

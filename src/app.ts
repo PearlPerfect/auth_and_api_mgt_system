@@ -2,16 +2,11 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import dotenv from 'dotenv';
 import sequelize from './config/database';
 import authRoutes from './routes/authRoutes';
 import apiKeyRoutes from './routes/apiKeyRoutes';
 import { setupSwagger } from './config/swagger';
-
-dotenv.config();
-
 import './models/associations';
-
 class App {
   public app: express.Application;
 

@@ -36,7 +36,7 @@ const options = {
       },
     },
   },
-  apis: ['./src/routes/*.ts'], // Path to the API routes
+  apis: ['./src/routes/*.ts'], 
 };
 
 const swaggerSpec = swaggerJsdoc(options);
@@ -44,7 +44,7 @@ const swaggerSpec = swaggerJsdoc(options);
 export const setupSwagger = (app: any): void => {
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
     swaggerOptions: {
-      url: '/api-docs.json',  // Make sure this points to your spec
+      url: '/api-docs.json',  
     }
   }));
   
