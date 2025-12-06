@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { AuthService } from '../services/authService';
+import { ApiKeyService } from '../services/apiKeyService';
 
 export class ApiKeyController {
   // Create API key
@@ -13,7 +13,7 @@ export class ApiKeyController {
         return;
       }
 
-      const apiKey = await AuthService.createApiKey(userId, name, permissions);
+      const apiKey = await ApiKeyService.createApiKey(userId, name, permissions);
 
       res.status(201).json({
         message: 'API key created successfully',
@@ -37,7 +37,7 @@ export class ApiKeyController {
   static async listApiKeys(req: Request, res: Response): Promise<void> {
     try {
       const userId = req.user.id;
-      const apiKeys = await AuthService.getUserApiKeys(userId);
+      const apiKeys = await ApiKeyService.getUserApiKeys(userId);
 
       // Mask the key for security (show only first 8 chars)
       const maskedApiKeys = apiKeys.map(key => ({
@@ -66,7 +66,7 @@ export class ApiKeyController {
       const userId = req.user.id;
       const { apiKeyId } = req.params;
 
-      const revoked = await AuthService.revokeApiKey(apiKeyId, userId);
+      const revoked = await ApiKeyService.revokeApiKey(apiKeyId, userId);
 
       if (!revoked) {
         res.status(404).json({ error: 'API key not found' });
@@ -90,14 +90,14 @@ export class ApiKeyController {
         return;
       }
 
-      const isValid = await AuthService.validateApiKey(apiKey);
+      const isValid = await ApiKeyService.validateApiKey(apiKey);
       
       if (!isValid) {
         res.status(401).json({ valid: false, message: 'Invalid or expired API key' });
         return;
       }
 
-      const keyDetails = await AuthService.getApiKeyDetails(apiKey);
+      const keyDetails = await ApiKeyService.getApiKeyDetails(apiKey);
       
       res.status(200).json({
         valid: true,

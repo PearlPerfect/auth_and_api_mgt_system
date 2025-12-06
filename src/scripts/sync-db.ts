@@ -1,4 +1,3 @@
-// src/scripts/sync-db.ts
 import sequelize from '../config/database';
 import './../models/User';
 import './../models/ApiKey';

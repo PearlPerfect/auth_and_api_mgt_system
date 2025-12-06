@@ -1,4 +1,3 @@
-// src/routes/apiKeyRoutes.ts
 import { Router } from 'express';
 import { ApiKeyController } from '../controllers/apiKeyController';
 import { authenticate, requirePermission } from '../middleware/auth';

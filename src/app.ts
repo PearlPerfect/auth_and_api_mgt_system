@@ -24,31 +24,26 @@ class App {
   }
 
   private initializeMiddleware(): void {
-    // Security middleware
     this.app.use(helmet());
     
-    // CORS configuration
     this.app.use(cors({
       origin: process.env.CORS_ORIGIN || '*',
       credentials: true,
     }));
     
-    // JSON parsing
+ 
     this.app.use(express.json());
     this.app.use(express.urlencoded({ extended: true }));
     
-    // Logging
     if (process.env.NODE_ENV === 'development') {
       this.app.use(morgan('dev'));
     }
   }
 
   private initializeRoutes(): void {
-    // API routes
     this.app.use('/auth', authRoutes);
     this.app.use('/keys', apiKeyRoutes);
     
-    // Health check endpoint
     this.app.get('/health', (req, res) => {
       res.status(200).json({
         status: 'OK',
@@ -57,7 +52,6 @@ class App {
       });
     });
     
-    // Root endpoint
     this.app.get('/', (req, res) => {
       res.status(200).json({
         message: 'Authentication & API Key System API',
@@ -75,7 +69,6 @@ class App {
   }
 
   private initializeErrorHandling(): void {
-    // 404 handler
     this.app.use((req, res) => {
       res.status(404).json({
         error: 'Not Found',
@@ -83,7 +76,6 @@ class App {
       });
     });
 
-    // Global error handler
     this.app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
       console.error('Global error handler:', err);
       
@@ -99,7 +91,6 @@ class App {
 
   public async start(port: number = 3000): Promise<void> {
     try {
-      // Test database connection
       await sequelize.authenticate();
       console.log('Database connection established successfully.');
 
