@@ -8,10 +8,8 @@ import authRoutes from './routes/authRoutes';
 import apiKeyRoutes from './routes/apiKeyRoutes';
 import { setupSwagger } from './config/swagger';
 
-// Load environment variables
 dotenv.config();
 
-// Import models and associations
 import './models/associations';
 
 class App {
@@ -105,8 +103,7 @@ class App {
       await sequelize.authenticate();
       console.log('Database connection established successfully.');
 
-      // Sync database (create tables if they don't exist)
-      // Use alter: true to update tables without dropping data
+  
       await sequelize.sync({ alter: true });
       console.log('Database synced successfully.');
 
@@ -114,8 +111,6 @@ class App {
       this.app.listen(port, () => {
         console.log(`✅ Server is running on http://localhost:${port}`);
         console.log(`📚 API Documentation: http://localhost:${port}/api-docs`);
-        console.log(`🏥 Health check: http://localhost:${port}/health`);
-        console.log(`🎯 Test API: http://localhost:${port}/`);
       });
     } catch (error) {
       console.error('Unable to start server:', error);
