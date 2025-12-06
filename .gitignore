@@ -1,0 +1,159 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Build output
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+
+# nyc test coverage
+.nyc_output
+
+# IDE specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# Upload directories (local storage)
+uploads/
+processed/
+thumbnails/
+
+# Database dumps
+*.dump
+*.sql
+*.bak
+
+# SSL certificates
+*.pem
+*.key
+*.crt
+*.csr
+
+# Package managers
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+shrinkwrap.yaml
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Testing
+.jest/
+.mocha/
+
+# Docker
+.dockerignore
+Dockerfile
+docker-compose.yml
+docker-compose.*.yml
+
+# Documentation
+/docs/_build/
+
+# Secrets
+secrets.yaml
+secrets.yml
+
+# Editor backup files
+*~
+\#*
+.\#*
+
+# System files
+.directory
+.cache
+.sass-cache/
+.stylelintcache
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Optional next.js build output
+.next
+
+# Optional nuxt.js build output
+.nuxt
+
+# Optional vuepress build output
+.vuepress/dist
+
+# Optional hidden files and directories
+.*
+!.gitignore
+!.env.example
+!.dockerignore
+
+# Temporary uploads (if using local storage)
+/storage/tmp/
+
+# Redis dump
+dump.rdb
+
+# PostgreSQL data directory (if applicable)
+/data/
+
+# Generated documentation
+/api-docs.json
+
+# Swagger/OpenAPI generated files
+/swagger/
+/openapi/
