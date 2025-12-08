@@ -38,6 +38,58 @@ class ApiKey extends Model<ApiKeyAttributes, ApiKeyCreationAttributes> implement
     return prefix + randomBytes;
   }
 
+  // Static method to encrypt key
+  public static encryptKey(plainKey: string): string {
+    const secret = process.env.ENCRYPTION_SECRET || 'your-default-secret-change-this-in-production';
+    
+    // If no secret or secret is empty, return plain text (for backward compatibility)
+    if (!secret || secret === 'your-default-secret-change-this-in-production') {
+      console.warn('⚠️  WARNING: Using plain text API keys. Set ENCRYPTION_SECRET in .env for encryption.');
+      return plainKey;
+    }
+    
+    const iv = crypto.randomBytes(16);
+    const key = crypto.createHash('sha256').update(secret).digest('base64').slice(0, 32);
+    const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(key), iv);
+    let encrypted = cipher.update(plainKey);
+    encrypted = Buffer.concat([encrypted, cipher.final()]);
+    return iv.toString('hex') + ':' + encrypted.toString('hex');
+  }
+
+  // Static method to decrypt key
+  public static decryptKey(encryptedKey: string): string {
+    try {
+      const secret = process.env.ENCRYPTION_SECRET || 'your-default-secret-change-this-in-production';
+      
+      // If no secret or key doesn't look encrypted (no colon), return as-is
+      if (!secret || secret === 'your-default-secret-change-this-in-production' || !encryptedKey.includes(':')) {
+        return encryptedKey;
+      }
+      
+      const textParts = encryptedKey.split(':');
+      if (textParts.length !== 2) {
+        throw new Error('Invalid encrypted key format');
+      }
+      
+      const iv = Buffer.from(textParts[0], 'hex');
+      const encryptedText = Buffer.from(textParts[1], 'hex');
+      const key = crypto.createHash('sha256').update(secret).digest('base64').slice(0, 32);
+      const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(key), iv);
+      let decrypted = decipher.update(encryptedText);
+      decrypted = Buffer.concat([decrypted, decipher.final()]);
+      return decrypted.toString();
+    } catch (error) {
+      console.error('Decryption error:', error);
+      // If decryption fails, return the original (might be plain text)
+      return encryptedKey;
+    }
+  }
+
+  // Instance method to get decrypted key
+  public getDecryptedKey(): string {
+    return ApiKey.decryptKey(this.key);
+  }
+
   // Instance method to check if key is expired
   public isExpired(): boolean {
     return new Date() > this.expires_at;
@@ -65,7 +117,7 @@ ApiKey.init(
       primaryKey: true,
     },
     key: {
-      type: DataTypes.STRING(128), 
+      type: DataTypes.STRING(500),
       allowNull: false,
       unique: true,
     },
@@ -126,16 +178,24 @@ ApiKey.init(
     createdAt: 'created_at',
     updatedAt: 'updated_at',
     hooks: {
-      beforeCreate: (apiKey: ApiKey) => {
+      beforeCreate: async (apiKey: ApiKey) => {
         // Generate key if not provided
         if (!apiKey.key) {
           apiKey.key = ApiKey.generateApiKey();
         }
-      },
-      beforeValidate: (apiKey: ApiKey) => {
-        if (!apiKey.key) {
-          apiKey.key = ApiKey.generateApiKey();
-        }
+        
+        // Store plain key temporarily
+        const plainKey = apiKey.key;
+        
+        // Encrypt before saving
+        apiKey.key = ApiKey.encryptKey(plainKey);
+        
+        console.log('API Key Creation:', {
+          id: apiKey.id,
+          plainKeyLength: plainKey.length,
+          encryptedKeyLength: apiKey.key.length,
+          isEncrypted: apiKey.key.includes(':')
+        });
       }
     },
   }

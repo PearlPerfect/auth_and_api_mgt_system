@@ -60,33 +60,58 @@ export const authenticateApiKey = async (
   try {
     const apiKeyHeader = req.headers['x-api-key'] as string || req.headers['api-key'] as string;
     
+    console.log('🔑 API Key Auth Attempt');
+    
     if (!apiKeyHeader) {
       res.status(401).json({ error: 'No API key provided' });
       return;
     }
 
-    const apiKey = await ApiKey.findOne({
+    // Get ALL active API keys
+    const allApiKeys = await ApiKey.findAll({
       where: {
-        key: apiKeyHeader,
         is_active: true,
       }
     });
 
-    if (!apiKey) {
+    console.log(`🔍 Found ${allApiKeys.length} active API keys to check`);
+
+    let validApiKey = null;
+    
+    // Check each key by decrypting and comparing
+    for (const apiKey of allApiKeys) {
+      try {
+        const decryptedKey = (apiKey as any).getDecryptedKey();
+        
+        if (decryptedKey === apiKeyHeader) {
+          validApiKey = apiKey;
+          console.log(`✅ Found matching key: ${apiKey.id}`);
+          break;
+        }
+      } catch (error: any) {
+        console.log(`❌ Failed to decrypt key ${apiKey.id}:`, error.message);
+        continue;
+      }
+    }
+
+    if (!validApiKey) {
+      console.log('❌ No matching API key found');
       res.status(401).json({ error: 'Invalid API key' });
       return;
     }
 
     // Check if expired
-    const apiKeyObj = apiKey as any;
+    const apiKeyObj = validApiKey as any;
     if (apiKeyObj.isExpired && apiKeyObj.isExpired()) {
+      console.log('⏰ API key expired:', apiKeyObj.id);
       res.status(401).json({ error: 'API key expired' });
       return;
     }
 
     // Get user
-    const user = await User.findByPk(apiKey.user_id);
+    const user = await User.findByPk(apiKeyObj.user_id);
     if (!user || !user.is_active) {
+      console.log('👤 User not found or inactive:', apiKeyObj.user_id);
       res.status(401).json({ error: 'User not found or inactive' });
       return;
     }
@@ -99,9 +124,11 @@ export const authenticateApiKey = async (
     req.user = user;
     req.apiKey = apiKeyObj;
     req.authType = 'apiKey';
+    
+    console.log(`🎉 API Key Auth Successful - User: ${user.email}, Key ID: ${apiKeyObj.id}`);
     next();
-  } catch (error) {
-    console.error('API key authentication error:', error);
+  } catch (error: any) {
+    console.error('API key authentication error:', error.message);
     res.status(500).json({ error: 'API key authentication failed' });
   }
 };
@@ -112,6 +139,12 @@ export const authenticate = async (
   res: Response,
   next: NextFunction
 ): Promise<void> => {
+  console.log('🔐 Authentication attempt', {
+    authorization: req.headers.authorization ? 'Present' : 'Missing',
+    'x-api-key': req.headers['x-api-key'] ? 'Present' : 'Missing',
+    'api-key': req.headers['api-key'] ? 'Present' : 'Missing'
+  });
+  
   const authHeader = req.headers.authorization as string;
   
   if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -151,8 +184,8 @@ export const requirePermission = (permission: string) => {
       } else {
         res.status(403).json({ error: 'Access denied' });
       }
-    } catch (error) {
-      console.error('Permission check error:', error);
+    } catch (error: any) {
+      console.error('Permission check error:', error.message);
       res.status(500).json({ error: 'Permission check failed' });
     }
   };
@@ -176,8 +209,8 @@ export const requireAdmin = async (
     }
     
     next();
-  } catch (error) {
-    console.error('Admin check error:', error);
+  } catch (error: any) {
+    console.error('Admin check error:', error.message);
     res.status(500).json({ error: 'Admin check failed' });
   }
 };

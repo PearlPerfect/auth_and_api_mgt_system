@@ -26,9 +26,9 @@ export class ApiKeyController {
       res.status(201).json({
         message: 'API key created successfully',
         apiKey: {
-          id: apiKey.id,
+          id: apiKey.id, // UUID
           name: apiKey.name,
-          key: apiKey.key,
+          key: apiKey.key, // Full key only shown on creation
           expires_at: apiKey.expires_at,
           permissions: apiKey.permissions,
           created_at: apiKey.created_at
@@ -77,18 +77,33 @@ export class ApiKeyController {
       const apiKeys = await ApiKeyService.getUserApiKeys(userId);
 
       // Mask the key for security (show only first 8 chars)
-      const maskedApiKeys = apiKeys.map(key => ({
-        id: key.id,
-        name: key.name,
-        key: key.key.substring(0, 8) + '...',
-        expires_at: key.expires_at,
-        is_active: key.is_active,
-        last_used_at: key.last_used_at,
-        usage_count: key.usage_count,
-        permissions: key.permissions,
-        created_at: key.created_at,
-        is_expired: new Date() > new Date(key.expires_at)
-      }));
+      const maskedApiKeys = apiKeys.map(key => {
+        // Check if key exists and is a string before calling substring
+        const keyValue = key.key;
+        let maskedKey = '[ENCRYPTED]';
+        
+        if (keyValue && typeof keyValue === 'string') {
+          if (keyValue.length >= 8) {
+            maskedKey = keyValue.substring(0, 8) + '...';
+          } else {
+            maskedKey = keyValue.substring(0, 4) + '...';
+          }
+        }
+        
+        return {
+          id: key.id, // UUID
+          name: key.name,
+          key: maskedKey,
+          expires_at: key.expires_at,
+          is_active: key.is_active,
+          last_used_at: key.last_used_at,
+          usage_count: key.usage_count,
+          permissions: key.permissions,
+          created_at: key.created_at,
+          updated_at: key.updated_at,
+          is_expired: new Date() > new Date(key.expires_at)
+        };
+      });
 
       const message = apiKeys.length === 0 
         ? 'You do not currently have any API keys. Create one to get started.'
@@ -99,17 +114,23 @@ export class ApiKeyController {
         apiKeys: maskedApiKeys,
         count: apiKeys.length
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('List API keys error:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ 
+        error: 'Internal server error',
+        message: 'Failed to retrieve API keys'
+      });
     }
   }
 
-  // Revoke API key
+  // Revoke API key - FIXED: Use UUID from params, not API key value
   static async revokeApiKey(req: Request, res: Response): Promise<void> {
     try {
       const userId = req.user.id;
-      const { apiKeyId } = req.params;
+      const { apiKeyId } = req.params; // This should be UUID, not the API key value
+      
+      console.log(`Revoking API key - User ID: ${userId}, API Key ID (UUID): ${apiKeyId}`);
+      
       const apiKey = await ApiKeyService.getApiKeyById(apiKeyId, userId);
       
       if (!apiKey) {
@@ -128,7 +149,6 @@ export class ApiKeyController {
         }
         return;
       }
-
 
       // Check if already revoked
       if (!apiKey.is_active) {
@@ -164,7 +184,7 @@ export class ApiKeyController {
           revoked_at: new Date().toISOString()
         }
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Revoke API key error:', error);
       res.status(500).json({ 
         error: 'Internal server error',
@@ -210,7 +230,7 @@ export class ApiKeyController {
           permissions: keyDetails.permissions
         }
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Validate API key error:', error);
       res.status(500).json({ 
         error: 'Internal server error',
@@ -236,7 +256,7 @@ export class ApiKeyController {
           permissions: req.apiKey.permissions
         } : null
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Test API key error:', error);
       res.status(500).json({ 
         error: 'Internal server error',

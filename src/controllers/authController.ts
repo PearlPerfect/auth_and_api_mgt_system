@@ -98,21 +98,45 @@ export class AuthController {
           }
         },
         order: [['created_at', 'DESC']],
+        attributes: [
+          'id', 
+          'key',  // ← Include key attribute
+          'name', 
+          'expires_at', 
+          'is_active', 
+          'last_used_at', 
+          'usage_count', 
+          'permissions', 
+          'created_at'
+        ]
       });
 
-      // Map and mask the keys
-      const maskedApiKeys = activeApiKeys.map(key => ({
-        id: key.id,
-        name: key.name,
-        key: key.key.substring(0, 8) + '...',
-        expires_at: key.expires_at,
-        is_active: key.is_active,
-        last_used_at: key.last_used_at,
-        usage_count: key.usage_count,
-        permissions: key.permissions,
-        created_at: key.created_at,
-        is_expired: false
-      }));
+      // Map and mask the keys with safety check
+      const maskedApiKeys = activeApiKeys.map(key => {
+        const keyValue = key.key;
+        let maskedKey = '[ENCRYPTED]';
+        
+        if (keyValue && typeof keyValue === 'string') {
+          if (keyValue.length >= 8) {
+            maskedKey = keyValue.substring(0, 8) + '...';
+          } else {
+            maskedKey = keyValue.substring(0, 4) + '...';
+          }
+        }
+        
+        return {
+          id: key.id,
+          name: key.name,
+          key: maskedKey,
+          expires_at: key.expires_at,
+          is_active: key.is_active,
+          last_used_at: key.last_used_at,
+          usage_count: key.usage_count,
+          permissions: key.permissions,
+          created_at: key.created_at,
+          is_expired: false
+        };
+      });
 
       const apiKeyMessage = activeApiKeys.length === 0
         ? 'You do not currently have any active API keys.'

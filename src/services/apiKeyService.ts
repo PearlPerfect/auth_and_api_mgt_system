@@ -30,23 +30,33 @@ export class ApiKeyService {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + expiresInDays);
 
+    // Generate API key
+    const apiKeyValue = ApiKey.generateApiKey();
+    
     const apiKey = await ApiKey.create({
       user_id: userId,
       name,
       permissions: permissions || 'read',
       expires_at: expiresAt,
+      key: apiKeyValue // This will be encrypted by the model hook
     });
 
-    return apiKey;
+    // Return the plain text key (only here, it's encrypted in DB)
+    const response = apiKey.toJSON() as any;
+    response.key = apiKeyValue; // Return the plain key to user
+    
+    return response;
   }
 
   // Revoke API key
   static async revokeApiKey(apiKeyId: string, userId: string): Promise<boolean> {
+    console.log(`Revoking API key ${apiKeyId} for user ${userId}`);
+    
     const [affectedCount] = await ApiKey.update(
       { is_active: false },
       {
         where: {
-          id: apiKeyId,
+          id: apiKeyId, // UUID
           user_id: userId,
         },
       }
@@ -66,6 +76,19 @@ export class ApiKeyService {
     const apiKeys = await ApiKey.findAll({
       where: whereClause,
       order: [['created_at', 'DESC']],
+      attributes: [
+        'id', 
+        'key', 
+        'name', 
+        'user_id', 
+        'expires_at', 
+        'is_active', 
+        'last_used_at', 
+        'usage_count', 
+        'permissions', 
+        'created_at', 
+        'updated_at'
+      ]
     });
 
     return apiKeys.map(key => key.toJSON());
@@ -75,55 +98,115 @@ export class ApiKeyService {
     return this.getUserApiKeys(userId, true);
   }
 
-  // Validate API key
+  // Validate API key - Optimized version
   static async validateApiKey(apiKey: string): Promise<boolean> {
-    const key = await ApiKey.findOne({
-      where: {
-        key: apiKey,
-        is_active: true,
-      },
-    });
+    try {
+      // First, check if it's a valid format
+      if (!apiKey || apiKey.length < 10) {
+        return false;
+      }
 
-    if (!key) return false;
-    
-    // Check if expired
-    const now = new Date();
-    const expiresAt = new Date(key.expires_at);
-    if (now > expiresAt) {
+      // Get all active keys (this could be optimized with caching)
+      const keys = await ApiKey.findAll({
+        where: {
+          is_active: true,
+          expires_at: {
+            [Op.gt]: new Date()
+          }
+        },
+      });
+
+      for (const key of keys) {
+        try {
+          const decryptedKey = key.getDecryptedKey();
+          if (decryptedKey === apiKey) {
+            // Update last used
+            await key.updateLastUsed();
+            return true;
+          }
+        } catch (error) {
+          // Skip keys that can't be decrypted
+          continue;
+        }
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error validating API key:', error);
       return false;
     }
-
-    return true;
   }
 
   // Get API key details
   static async getApiKeyDetails(apiKey: string): Promise<any> {
-    const key = await ApiKey.findOne({
-      where: { key: apiKey }
-    });
+    try {
+      const keys = await ApiKey.findAll({
+        where: { 
+          is_active: true,
+          expires_at: {
+            [Op.gt]: new Date()
+          }
+        }
+      });
 
-    if (!key) return null;
-    
-    const user = await User.findByPk(key.user_id);
-    const keyData = key.toJSON() as any;
-    
-    if (user) {
-      const userData = user.toJSON() as any;
-      const { password: _, ...userWithoutPassword } = userData;
-      keyData.user = userWithoutPassword;
+      for (const key of keys) {
+        try {
+          const decryptedKey = key.getDecryptedKey();
+          if (decryptedKey === apiKey) {
+            const user = await User.findByPk(key.user_id, {
+              attributes: { exclude: ['password'] }
+            });
+            
+            const keyData = key.toJSON() as any;
+            keyData.user = user;
+            
+            return keyData;
+          }
+        } catch (error) {
+          continue;
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error getting API key details:', error);
+      return null;
     }
-    
-    return keyData;
   }
 
+  // Get API key by ID - FIXED: Accepts UUID, not API key value
   static async getApiKeyById(apiKeyId: string, userId?: string): Promise<any> {
-    const where: any = { id: apiKeyId };
+    console.log(`Getting API key by ID: ${apiKeyId}, User ID: ${userId || 'not specified'}`);
+    
+    const where: any = { id: apiKeyId }; // This should be UUID
     if (userId) {
       where.user_id = userId;
     }
 
-    const apiKey = await ApiKey.findOne({ where });
-    return apiKey ? apiKey.toJSON() : null;
+    const apiKey = await ApiKey.findOne({ 
+      where,
+      attributes: [
+        'id', 
+        'key', 
+        'name', 
+        'user_id', 
+        'expires_at', 
+        'is_active', 
+        'last_used_at', 
+        'usage_count', 
+        'permissions', 
+        'created_at', 
+        'updated_at'
+      ]
+    });
+    
+    if (!apiKey) {
+      console.log(`API key not found with ID: ${apiKeyId}`);
+      return null;
+    }
+    
+    const keyData = apiKey.toJSON() as any;
+    return keyData;
   }
 
   // Update API key
