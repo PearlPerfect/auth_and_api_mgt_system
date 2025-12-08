@@ -16,9 +16,22 @@ interface ApiKeyAttributes {
   updated_at: Date;
 }
 
-interface ApiKeyCreationAttributes extends Optional<ApiKeyAttributes, 'id' | 'key' | 'is_active' | 'last_used_at' | 'usage_count' | 'created_at' | 'updated_at'> {}
+// Add a new interface that accepts string or array for permissions
+interface ApiKeyCreationInput {
+  id?: string;
+  key?: string;
+  name: string;
+  user_id: string;
+  expires_at: Date;
+  is_active?: boolean;
+  last_used_at?: Date | null;
+  usage_count?: number;
+  permissions?: string | string[];
+  created_at?: Date;
+  updated_at?: Date;
+}
 
-class ApiKey extends Model<ApiKeyAttributes, ApiKeyCreationAttributes> implements ApiKeyAttributes {
+class ApiKey extends Model<ApiKeyAttributes> implements ApiKeyAttributes {
   public id!: string;
   public key!: string;
   public name!: string;
@@ -42,7 +55,6 @@ class ApiKey extends Model<ApiKeyAttributes, ApiKeyCreationAttributes> implement
   public static encryptKey(plainKey: string): string {
     const secret = process.env.ENCRYPTION_SECRET || 'your-default-secret-change-this-in-production';
     
-    // If no secret or secret is empty, return plain text (for backward compatibility)
     if (!secret || secret === 'your-default-secret-change-this-in-production') {
       console.warn('⚠️  WARNING: Using plain text API keys. Set ENCRYPTION_SECRET in .env for encryption.');
       return plainKey;
@@ -61,7 +73,6 @@ class ApiKey extends Model<ApiKeyAttributes, ApiKeyCreationAttributes> implement
     try {
       const secret = process.env.ENCRYPTION_SECRET || 'your-default-secret-change-this-in-production';
       
-      // If no secret or key doesn't look encrypted (no colon), return as-is
       if (!secret || secret === 'your-default-secret-change-this-in-production' || !encryptedKey.includes(':')) {
         return encryptedKey;
       }
@@ -80,7 +91,6 @@ class ApiKey extends Model<ApiKeyAttributes, ApiKeyCreationAttributes> implement
       return decrypted.toString();
     } catch (error) {
       console.error('Decryption error:', error);
-      // If decryption fails, return the original (might be plain text)
       return encryptedKey;
     }
   }
@@ -90,7 +100,6 @@ class ApiKey extends Model<ApiKeyAttributes, ApiKeyCreationAttributes> implement
     return ApiKey.decryptKey(this.key);
   }
 
-  // Instance method to check if key is expired
   public isExpired(): boolean {
     return new Date() > this.expires_at;
   }
@@ -104,8 +113,49 @@ class ApiKey extends Model<ApiKeyAttributes, ApiKeyCreationAttributes> implement
 
   // Instance method to check permission
   public hasPermission(requiredPermission: string): boolean {
+    if (!this.permissions) return false;
+    
+    // Check if permissions is a JSON array string
+    try {
+      const parsed = JSON.parse(this.permissions);
+      if (Array.isArray(parsed)) {
+        return parsed.includes(requiredPermission) || parsed.includes('*');
+      }
+    } catch {
+      // If not JSON, treat as comma-separated string
+    }
+    
     const permissions = this.permissions.split(',').map(p => p.trim());
     return permissions.includes(requiredPermission) || permissions.includes('*');
+  }
+
+  // Helper method to get permissions as array
+  public getPermissionsArray(): string[] {
+    if (!this.permissions) return [];
+    
+    try {
+      const parsed = JSON.parse(this.permissions);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch {
+      // Not JSON, parse as comma-separated
+    }
+    
+    return this.permissions.split(',').map(p => p.trim());
+  }
+
+  // Static method to create with proper permissions handling
+  public static async createApiKey(data: ApiKeyCreationInput): Promise<ApiKey> {
+    // Convert permissions to string if it's an array
+    const permissions = Array.isArray(data.permissions) 
+      ? JSON.stringify(data.permissions)
+      : data.permissions || 'read';
+    
+    return this.create({
+      ...data,
+      permissions
+    } as any);
   }
 }
 
@@ -157,6 +207,25 @@ ApiKey.init(
     permissions: {
       type: DataTypes.TEXT,
       defaultValue: 'read',
+      get() {
+        const rawValue = this.getDataValue('permissions');
+        // Try to parse as JSON array
+        try {
+          if (rawValue && rawValue.startsWith('[')) {
+            return JSON.parse(rawValue);
+          }
+        } catch {
+          // If not valid JSON, return as is
+        }
+        return rawValue;
+      },
+      set(value: string | string[]) {
+        if (Array.isArray(value)) {
+          this.setDataValue('permissions', JSON.stringify(value));
+        } else {
+          this.setDataValue('permissions', value);
+        }
+      }
     },
     created_at: {
       type: DataTypes.DATE,

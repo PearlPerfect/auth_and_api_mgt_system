@@ -1,4 +1,3 @@
-// scripts/migrate-keys.ts
 import dotenv from 'dotenv';
 import sequelize from '../config/database';
 import ApiKey from '../models/ApiKey';
@@ -11,7 +10,7 @@ async function migrateExistingKeys() {
     
     // Connect to database
     await sequelize.authenticate();
-    console.log('✅ Database connection established\n');
+    console.log('Database connection established\n');
     
     // Get all API keys
     const allKeys = await ApiKey.findAll();
@@ -34,7 +33,7 @@ async function migrateExistingKeys() {
       
       // Check if key is already encrypted (contains colon)
       if (keyValue.includes(':')) {
-        console.log('✅ Already encrypted');
+        console.log('Already encrypted');
         alreadyEncryptedCount++;
         continue;
       }
@@ -54,13 +53,13 @@ async function migrateExistingKeys() {
           await key.update({ key: encryptedKey });
           
           migratedCount++;
-          console.log('✅ Successfully encrypted');
+          console.log('Successfully encrypted');
         } catch (error: any) {
           errorCount++;
-          console.log('❌ Failed to encrypt:', error.message);
+          console.log('Failed to encrypt:', error.message);
         }
       } else {
-        console.log('⚠️  Not a standard API key format, skipping');
+        console.log('Not a standard API key format, skipping');
       }
     }
     

@@ -30,11 +30,11 @@ const sequelize = new Sequelize(dbName, dbUser, dbPassword, {
 // Test connection
 sequelize.authenticate()
   .then(() => {
-    console.log('✅ Database connection has been established successfully.');
+    console.log('Database connection has been established successfully.');
   })
   .catch((error: Error) => {
-    console.error('❌ Unable to connect to the database:', error.message);
-    console.log('⚠️  Starting server without database connection...');
+    console.error('Unable to connect to the database:', error.message);
+    console.log('Starting server without database connection...');
   });
 
 export default sequelize;

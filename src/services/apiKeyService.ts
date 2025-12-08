@@ -7,7 +7,7 @@ export class ApiKeyService {
   static async createApiKey(
     userId: string,
     name: string,
-    permissions: string = 'read'
+    permissions: string | string[] = 'read'
   ): Promise<any> {
     // Check if an active API key with the same name already exists for this user
     const existingKey = await ApiKey.findOne({
@@ -33,12 +33,13 @@ export class ApiKeyService {
     // Generate API key
     const apiKeyValue = ApiKey.generateApiKey();
     
-    const apiKey = await ApiKey.create({
+    // Use the static method to create with proper permissions handling
+    const apiKey = await ApiKey.createApiKey({
       user_id: userId,
       name,
-      permissions: permissions || 'read',
+      permissions: permissions,
       expires_at: expiresAt,
-      key: apiKeyValue // This will be encrypted by the model hook
+      key: apiKeyValue
     });
 
     // Return the plain text key (only here, it's encrypted in DB)
@@ -48,7 +49,7 @@ export class ApiKeyService {
     return response;
   }
 
-  // Revoke API key
+  // Revoke API key (mark as inactive)
   static async revokeApiKey(apiKeyId: string, userId: string): Promise<boolean> {
     console.log(`Revoking API key ${apiKeyId} for user ${userId}`);
     
@@ -56,13 +57,44 @@ export class ApiKeyService {
       { is_active: false },
       {
         where: {
-          id: apiKeyId, // UUID
+          id: apiKeyId,
           user_id: userId,
         },
       }
     );
 
     return affectedCount > 0;
+  }
+
+  // Reactivate API key
+  static async reactivateApiKey(apiKeyId: string, userId: string): Promise<boolean> {
+    console.log(`Reactivating API key ${apiKeyId} for user ${userId}`);
+    
+    const [affectedCount] = await ApiKey.update(
+      { is_active: true },
+      {
+        where: {
+          id: apiKeyId,
+          user_id: userId,
+        },
+      }
+    );
+
+    return affectedCount > 0;
+  }
+
+  // Delete API key permanently
+  static async deleteApiKey(apiKeyId: string, userId: string): Promise<boolean> {
+    console.log(`Deleting API key ${apiKeyId} for user ${userId}`);
+    
+    const deletedCount = await ApiKey.destroy({
+      where: {
+        id: apiKeyId,
+        user_id: userId,
+      },
+    });
+
+    return deletedCount > 0;
   }
 
   // Get user's API keys
@@ -98,15 +130,13 @@ export class ApiKeyService {
     return this.getUserApiKeys(userId, true);
   }
 
-  // Validate API key - Optimized version
+  // Validate API key
   static async validateApiKey(apiKey: string): Promise<boolean> {
     try {
-      // First, check if it's a valid format
       if (!apiKey || apiKey.length < 10) {
         return false;
       }
 
-      // Get all active keys (this could be optimized with caching)
       const keys = await ApiKey.findAll({
         where: {
           is_active: true,
@@ -120,12 +150,10 @@ export class ApiKeyService {
         try {
           const decryptedKey = key.getDecryptedKey();
           if (decryptedKey === apiKey) {
-            // Update last used
             await key.updateLastUsed();
             return true;
           }
         } catch (error) {
-          // Skip keys that can't be decrypted
           continue;
         }
       }
@@ -174,11 +202,11 @@ export class ApiKeyService {
     }
   }
 
-  // Get API key by ID - FIXED: Accepts UUID, not API key value
+  // Get API key by ID
   static async getApiKeyById(apiKeyId: string, userId?: string): Promise<any> {
     console.log(`Getting API key by ID: ${apiKeyId}, User ID: ${userId || 'not specified'}`);
     
-    const where: any = { id: apiKeyId }; // This should be UUID
+    const where: any = { id: apiKeyId };
     if (userId) {
       where.user_id = userId;
     }
@@ -205,18 +233,28 @@ export class ApiKeyService {
       return null;
     }
     
-    const keyData = apiKey.toJSON() as any;
-    return keyData;
+    return apiKey.toJSON();
   }
 
   // Update API key
   static async updateApiKey(
     apiKeyId: string,
     userId: string,
-    updates: { name?: string; permissions?: string; is_active?: boolean }
+    updates: { name?: string; permissions?: string | string[]; is_active?: boolean }
   ): Promise<boolean> {
+    const updateData: any = {};
+    
+    if (updates.name !== undefined) updateData.name = updates.name;
+    if (updates.is_active !== undefined) updateData.is_active = updates.is_active;
+    if (updates.permissions !== undefined) {
+      // Convert array to JSON string if needed
+      updateData.permissions = Array.isArray(updates.permissions) 
+        ? JSON.stringify(updates.permissions)
+        : updates.permissions;
+    }
+    
     const [affectedCount] = await ApiKey.update(
-      updates,
+      updateData,
       {
         where: {
           id: apiKeyId,

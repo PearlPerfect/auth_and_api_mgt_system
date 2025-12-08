@@ -6,7 +6,7 @@ export class ApiKeyController {
   static async createApiKey(req: Request, res: Response): Promise<void> {
     try {
       const userId = req.user.id;
-      const { name, permissions } = req.body || {}
+      const { name, permissions, expiresInDays } = req.body || {};
 
       if (!name) {
         res.status(400).json({ error: 'API key name is required' });
@@ -21,14 +21,17 @@ export class ApiKeyController {
         return;
       }
 
-      const apiKey = await ApiKeyService.createApiKey(userId, name, permissions);
+      // Handle permissions - use provided permissions or default
+      const validPermissions = permissions || 'read';
+
+      const apiKey = await ApiKeyService.createApiKey(userId, name, validPermissions);
 
       res.status(201).json({
         message: 'API key created successfully',
         apiKey: {
-          id: apiKey.id, // UUID
+          id: apiKey.id,
           name: apiKey.name,
-          key: apiKey.key, // Full key only shown on creation
+          key: apiKey.key,
           expires_at: apiKey.expires_at,
           permissions: apiKey.permissions,
           created_at: apiKey.created_at
@@ -42,7 +45,6 @@ export class ApiKeyController {
         errors: error.errors
       });
       
-      // Handle duplicate name error
       if (error.message === 'An active API key with this name already exists') {
         res.status(409).json({ 
           error: error.message,
@@ -51,7 +53,6 @@ export class ApiKeyController {
         return;
       }
       
-      // Handle Sequelize validation errors
       if (error.name === 'SequelizeValidationError') {
         const messages = error.errors.map((err: any) => err.message);
         res.status(400).json({ 
@@ -76,9 +77,8 @@ export class ApiKeyController {
       const userId = req.user.id;
       const apiKeys = await ApiKeyService.getUserApiKeys(userId);
 
-      // Mask the key for security (show only first 8 chars)
+      // Mask the key for security
       const maskedApiKeys = apiKeys.map(key => {
-        // Check if key exists and is a string before calling substring
         const keyValue = key.key;
         let maskedKey = '[ENCRYPTED]';
         
@@ -91,7 +91,7 @@ export class ApiKeyController {
         }
         
         return {
-          id: key.id, // UUID
+          id: key.id,
           name: key.name,
           key: maskedKey,
           expires_at: key.expires_at,
@@ -123,13 +123,13 @@ export class ApiKeyController {
     }
   }
 
-  // Revoke API key - FIXED: Use UUID from params, not API key value
+  // Revoke API key (mark as inactive)
   static async revokeApiKey(req: Request, res: Response): Promise<void> {
     try {
       const userId = req.user.id;
-      const { apiKeyId } = req.params; // This should be UUID, not the API key value
+      const { apiKeyId } = req.params;
       
-      console.log(`Revoking API key - User ID: ${userId}, API Key ID (UUID): ${apiKeyId}`);
+      console.log(`Revoking API key - User ID: ${userId}, API Key ID: ${apiKeyId}`);
       
       const apiKey = await ApiKeyService.getApiKeyById(apiKeyId, userId);
       
@@ -150,7 +150,6 @@ export class ApiKeyController {
         return;
       }
 
-      // Check if already revoked
       if (!apiKey.is_active) {
         res.status(400).json({ 
           error: 'API key already revoked',
@@ -186,6 +185,148 @@ export class ApiKeyController {
       });
     } catch (error: any) {
       console.error('Revoke API key error:', error);
+      res.status(500).json({ 
+        error: 'Internal server error',
+        message: 'An unexpected error occurred while processing your request.'
+      });
+    }
+  }
+
+  // Reactivate API key
+  static async reactivateApiKey(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = req.user.id;
+      const { apiKeyId } = req.params;
+      
+      console.log(`Reactivating API key - User ID: ${userId}, API Key ID: ${apiKeyId}`);
+      
+      const apiKey = await ApiKeyService.getApiKeyById(apiKeyId, userId);
+      
+      if (!apiKey) {
+        const anyApiKey = await ApiKeyService.getApiKeyById(apiKeyId);
+        if (!anyApiKey) {
+          res.status(404).json({ 
+            error: 'API key not found',
+            message: 'The API key you are trying to reactivate does not exist.'
+          });
+        } else {
+          res.status(403).json({ 
+            error: 'Forbidden',
+            message: 'You do not have permission to reactivate this API key.',
+            details: 'This API key belongs to another user account.'
+          });
+        }
+        return;
+      }
+
+      if (apiKey.is_active) {
+        res.status(400).json({ 
+          error: 'API key already active',
+          message: 'This API key is already active.',
+          details: {
+            id: apiKey.id,
+            name: apiKey.name,
+            status: 'active'
+          }
+        });
+        return;
+      }
+
+      // Check if expired
+      if (new Date() > new Date(apiKey.expires_at)) {
+        res.status(400).json({ 
+          error: 'Cannot reactivate expired key',
+          message: 'This API key has expired and cannot be reactivated.',
+          details: {
+            id: apiKey.id,
+            name: apiKey.name,
+            expires_at: apiKey.expires_at,
+            suggestion: 'Create a new API key instead.'
+          }
+        });
+        return;
+      }
+
+      const reactivated = await ApiKeyService.reactivateApiKey(apiKeyId, userId);
+
+      if (!reactivated) {
+        console.log('Failed to reactivate API key:', apiKeyId);
+        res.status(500).json({ 
+          error: 'Failed to reactivate API key',
+          message: 'An unexpected error occurred while trying to reactivate the API key.'
+        });
+        return;
+      }
+
+      res.status(200).json({ 
+        message: 'API key reactivated successfully',
+        details: {
+          id: apiKey.id,
+          name: apiKey.name,
+          status: 'active',
+          reactivated_at: new Date().toISOString(),
+          expires_at: apiKey.expires_at
+        }
+      });
+    } catch (error: any) {
+      console.error('Reactivate API key error:', error);
+      res.status(500).json({ 
+        error: 'Internal server error',
+        message: 'An unexpected error occurred while processing your request.'
+      });
+    }
+  }
+
+  // Delete API key permanently
+  static async deleteApiKey(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = req.user.id;
+      const { apiKeyId } = req.params;
+      
+      console.log(`Deleting API key - User ID: ${userId}, API Key ID: ${apiKeyId}`);
+      
+      const apiKey = await ApiKeyService.getApiKeyById(apiKeyId, userId);
+      
+      if (!apiKey) {
+        const anyApiKey = await ApiKeyService.getApiKeyById(apiKeyId);
+        if (!anyApiKey) {
+          res.status(404).json({ 
+            error: 'API key not found',
+            message: 'The API key you are trying to delete does not exist.'
+          });
+        } else {
+          res.status(403).json({ 
+            error: 'Forbidden',
+            message: 'You do not have permission to delete this API key.',
+            details: 'This API key belongs to another user account.'
+          });
+        }
+        return;
+      }
+
+      const deleted = await ApiKeyService.deleteApiKey(apiKeyId, userId);
+
+      if (!deleted) {
+        console.log('Failed to delete API key:', apiKeyId);
+        res.status(500).json({ 
+          error: 'Failed to delete API key',
+          message: 'An unexpected error occurred while trying to delete the API key.'
+        });
+        return;
+      }
+
+      res.status(200).json({ 
+        message: 'API key deleted permanently',
+        details: {
+          id: apiKey.id,
+          name: apiKey.name,
+          status: 'deleted',
+          deleted_at: new Date().toISOString()
+        },
+        warning: 'This action cannot be undone. The API key has been permanently deleted.'
+      });
+    } catch (error: any) {
+      console.error('Delete API key error:', error);
       res.status(500).json({ 
         error: 'Internal server error',
         message: 'An unexpected error occurred while processing your request.'

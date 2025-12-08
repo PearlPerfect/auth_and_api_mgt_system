@@ -27,7 +27,7 @@ router.use(authenticate);
  *             properties:
  *               name:
  *                 type: string
- *                 description: Unique name for the API key (cannot be the same as an existing active key for the user)
+ *                 description: Unique name for the API key
  *               permissions:
  *                 type: array
  *                 items:
@@ -68,7 +68,7 @@ router.get('/', ApiKeyController.listApiKeys);
  * @swagger
  * /keys/{apiKeyId}/revoke:
  *   delete:
- *     summary: Revoke an API key
+ *     summary: Revoke an API key (mark as inactive)
  *     tags: [API Keys]
  *     security:
  *       - bearerAuth: []
@@ -85,6 +85,52 @@ router.get('/', ApiKeyController.listApiKeys);
  *         description: API key not found
  */
 router.delete('/:apiKeyId/revoke', ApiKeyController.revokeApiKey);
+
+/**
+ * @swagger
+ * /keys/{apiKeyId}/reactivate:
+ *   patch:
+ *     summary: Reactivate an API key
+ *     tags: [API Keys]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: apiKeyId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: API key reactivated successfully
+ *       400:
+ *         description: API key is expired or already active
+ *       404:
+ *         description: API key not found
+ */
+router.patch('/:apiKeyId/reactivate', ApiKeyController.reactivateApiKey);
+
+/**
+ * @swagger
+ * /keys/{apiKeyId}:
+ *   delete:
+ *     summary: Delete an API key permanently
+ *     tags: [API Keys]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: apiKeyId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: API key deleted permanently
+ *       404:
+ *         description: API key not found
+ */
+router.delete('/:apiKeyId', ApiKeyController.deleteApiKey);
 
 /**
  * @swagger
@@ -108,5 +154,22 @@ router.delete('/:apiKeyId/revoke', ApiKeyController.revokeApiKey);
  *         description: Validation result
  */
 router.post('/validate', ApiKeyController.validateKey);
+
+/**
+ * @swagger
+ * /keys/test:
+ *   get:
+ *     summary: Test API key authentication
+ *     tags: [API Keys]
+ *     security:
+ *       - apiKeyAuth: []
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Authentication test successful
+ *       401:
+ *         description: Not authenticated
+ */
+router.get('/test', ApiKeyController.testApiKey);
 
 export default router;

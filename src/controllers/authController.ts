@@ -10,7 +10,6 @@ export class AuthController {
     try {
       const { name, email, password, role } = req.body;
 
-      // Validation
       if (!name || !email || !password) {
         res.status(400).json({ 
           error: 'Missing required fields',
@@ -88,7 +87,7 @@ export class AuthController {
     try {
       const user = req.user;
       
-      // Get user's active API keys directly from the database
+      // Get user's active API keys
       const activeApiKeys = await ApiKey.findAll({
         where: {
           user_id: user.id,
@@ -100,7 +99,7 @@ export class AuthController {
         order: [['created_at', 'DESC']],
         attributes: [
           'id', 
-          'key',  // ← Include key attribute
+          'key',
           'name', 
           'expires_at', 
           'is_active', 
@@ -124,6 +123,16 @@ export class AuthController {
           }
         }
         
+        // Parse permissions if it's a JSON string
+        let permissions = key.permissions;
+        try {
+          if (permissions && permissions.startsWith('[')) {
+            permissions = JSON.parse(permissions);
+          }
+        } catch {
+          // If not JSON, keep as is
+        }
+        
         return {
           id: key.id,
           name: key.name,
@@ -132,7 +141,7 @@ export class AuthController {
           is_active: key.is_active,
           last_used_at: key.last_used_at,
           usage_count: key.usage_count,
-          permissions: key.permissions,
+          permissions: permissions,
           created_at: key.created_at,
           is_expired: false
         };
